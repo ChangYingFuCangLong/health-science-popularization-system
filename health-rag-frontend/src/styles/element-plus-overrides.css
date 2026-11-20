@@ -1,0 +1,43 @@
+/* ============================================================
+ * Element Plus 覆盖层样式（缺陷修复 D-FE-01 的第二批）
+ *
+ * 上游默认定义（node_modules/element-plus/theme-chalk/el-dialog.css）：
+ *   .el-dialog { --el-dialog-margin-top: 15vh;
+ *                margin: var(--el-dialog-margin-top, 15vh) auto 50px; }
+ *
+ * 即「距顶部 15% 视口高度」。实测 857×775 视口下：
+ *   marginTop = 116.3px（= 15vh）
+ *   dialog 垂直中心 = 318px，而页面中心 = 388px —— 偏上 70px
+ * 用户观感即为「弹窗没在中间」。
+ *
+ * 修复思路：把遮罩层 .el-overlay-dialog 改成 flex 容器，再让 .el-dialog 用
+ * margin:auto 撑开剩余空间，实现真正的水平 + 垂直居中。
+ *
+ * 为什么不用 align-items:center：flex 居中在内容高度超过容器时会导致
+ * 顶部溢出且无法滚动看到（标题会被裁到屏幕外）。margin:auto 在溢出时会
+ * 自动归零，弹窗退回顶部对齐并保留滚动，这是更稳的方案。
+ *
+ * 影响范围：仅 el-dialog（评测集管理页「新增题目」「运行评测」两处）。
+ * ElMessageBox 走 .el-overlay-message-box 另一套机制，本身已天然居中，不受影响。
+ * ElDrawer 是贴边抽屉，不做居中处理。
+ * ============================================================ */
+
+.el-overlay-dialog {
+  display: flex;
+  /* 对称内边距：视口充足时不影响居中（上下等距），
+   * 视口不足、弹窗宽度/高度溢出时至少保留 16px 呼吸边距，不会紧贴屏幕边缘。 */
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.el-overlay-dialog > .el-dialog {
+  /* 覆盖上游的 15vh 上边距；在 flex 容器内 auto 即等于垂直居中。
+   * 溢出时 auto 自动归零，弹窗退回顶部对齐并保留滚动，标题不会被裁掉。 */
+  margin: auto;
+}
+
+/* 全屏弹窗保持撑满，不参与居中 */
+.el-overlay-dialog > .el-dialog.is-fullscreen {
+  margin: 0;
+  height: 100%;
+}

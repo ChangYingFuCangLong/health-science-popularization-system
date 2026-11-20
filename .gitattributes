@@ -1,0 +1,19 @@
+# 统一换行符：文本入库为 LF，检出时按平台转换
+* text=auto
+
+# WSL / Linux 下执行的脚本与 SQL 必须保持 LF
+*.sh text eol=lf
+*.sql text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# 二进制资源
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.jar binary
+*.tar.gz binary
+*.tar.bz2 binary

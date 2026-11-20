@@ -1,0 +1,125 @@
+/* ============================================================
+ * 设计令牌 v2 ——「生命体征 · Vital」
+ * 全工程唯一来源：颜色 / 字号 / 圆角 / 容器宽度只允许在本文件定义。
+ *
+ * 设计语义（答辩陈述用）：
+ *   双温区色彩系统直接编码 RAG 的两个阶段——
+ *   青色（冷 / 理性）= 检索；珊瑚色（暖 / 生命）= 生成。
+ *   阶段时间线、引用评分条、脉搏线的配色都从这里取值。
+ *
+ * 主题机制：
+ *   raw 变量在 :root / .dark 中按主题取值；
+ *   @theme inline 把 Tailwind 工具类映射到 raw 变量，
+ *   因此切换 .dark 类即可整站换肤，组件里不写死任何色值。
+ *   初始主题由 index.html 的内联脚本在挂载前设置，避免闪烁。
+ * ============================================================ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------- 暗色「夜间诊室」（默认） ---------------- */
+:root,
+.dark {
+  --c-canvas: #0b1512; /* 页面底：深墨绿，仪器面板 */
+  --c-surface: #101d19; /* 内容容器 */
+  --c-surface-2: #16261f; /* 抬升层 / 悬浮层 */
+  --c-line: #223c33; /* 分隔线 / 描边 */
+  --c-line-strong: #2e4f42;
+
+  --c-ink: #e9f3ef; /* 正文 ≈ 14:1 */
+  --c-ink-muted: #92aba2; /* 说明 ≈ 5.6:1 */
+
+  --c-brand: #2dd4bf; /* 青：检索 / 链接（暗底上文字安全） */
+  --c-brand-strong: #14b8a6; /* 青按钮底（配深色文字） */
+  --c-brand-soft: rgba(45, 212, 191, 0.12); /* 选中态 / 标签底 */
+
+  --c-accent: #fb923c; /* 珊瑚：生成 / 生命体征 */
+  --c-accent-soft: rgba(251, 146, 60, 0.14);
+
+  --c-success: #34d399;
+  --c-warning: #fbbf24;
+  --c-danger: #f87171;
+
+  /* 主按钮渐变：双温区两端在暗底上都足够亮，配深色文字 */
+  --grad-a: #2dd4bf;
+  --grad-b: #fb923c;
+  --grad-on: #062018; /* 渐变上的文字色（深） */
+  --blob-opacity: 0.5;
+  --header-bg: rgba(11, 21, 18, 0.72);
+}
+
+/* ---------------- 亮色「晨间诊室」 ---------------- */
+:root:not(.dark) {
+  --c-canvas: #f4f7f6;
+  --c-surface: #ffffff;
+  --c-surface-2: #eef4f1;
+  --c-line: #dbe5e0;
+  --c-line-strong: #c3d4cc;
+
+  --c-ink: #10201b; /* ≈ 15:1 */
+  --c-ink-muted: #5a7168; /* ≈ 4.9:1 */
+
+  --c-brand: #0f766e; /* 白底文字安全 ≈ 5.3:1 */
+  --c-brand-strong: #0f766e; /* 青按钮底（配白字） */
+  --c-brand-soft: #d5f2ec;
+
+  --c-accent: #c2410c; /* ≈ 4.8:1 */
+  --c-accent-soft: #fdeadd;
+
+  --c-success: #047857;
+  --c-warning: #b45309;
+  --c-danger: #dc2626;
+
+  /* 亮色渐变两端配白字均 ≥ 4.5:1（teal-700 5.3 / orange-700 4.8） */
+  --grad-a: #0f766e;
+  --grad-b: #c2410c;
+  --grad-on: #ffffff;
+  --blob-opacity: 0.35;
+  --header-bg: rgba(244, 247, 246, 0.78);
+}
+
+/* ---------------- Tailwind 工具类映射（随主题翻转） ---------------- */
+@theme inline {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-ink: var(--c-ink);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-brand: var(--c-brand);
+  --color-brand-strong: var(--c-brand-strong);
+  --color-brand-soft: var(--c-brand-soft);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-success: var(--c-success);
+  --color-warning: var(--c-warning);
+  --color-danger: var(--c-danger);
+}
+
+/* ---------------- 静态令牌（不随主题变化） ---------------- */
+@theme {
+  --font-display:
+    'Bahnschrift', 'DIN Alternate', 'Segoe UI', -apple-system, 'PingFang SC', 'Microsoft YaHei',
+    sans-serif; /* 仪表读数专用：数字等宽、字形冷静 */
+
+  --text-display: 22px; /* 页面标题 */
+  --text-section: 16px; /* 区块标题 */
+  --text-chat: 15px; /* 对话正文（长文阅读） */
+  --text-body: 14px; /* 常规正文 */
+  --text-hint: 12px; /* 辅助信息（下限） */
+
+  --radius-btn: 10px;
+  --radius-card: 16px;
+  --radius-bubble: 16px;
+  --radius-input: 14px;
+
+  --container-chat: 840px;
+  --container-list: 1200px;
+
+  /* 移动端断点：全站唯一的「手机 / 桌面」分界（Element Plus 的 md 断点与之对齐）
+     约定：一切移动端形态改造只写 max-md，一切桌面形态保持原样不写前缀 */
+  --bp-mobile: 768px;
+
+  /* 移动端底部标签栏高度（内容高度，不含 iOS 安全区；安全区在 main.css 追加） */
+  --size-tabbar: 54px;
+}

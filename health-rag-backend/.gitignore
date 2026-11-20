@@ -1,0 +1,33 @@
+# 构建产物
+target/
+build/
+dist/
+out/
+*.class
+*.jar
+*.war
+
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 环境与密钥（严禁入库）
+.env
+.env.local
+.env.*.local
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# 运行态数据：向量库落盘文件（数十 MB，可由 kb_chunk 原文重建，无需入库）
+data/
+*.vector-store.json
+
+# 日志与临时文件
+*.log
+logs/
+tmp/

@@ -1,0 +1,55 @@
+# ============================================================
+# 健康科普 RAG 系统 · PostgreSQL 主库编排（v2.0，与 V1 MySQL 栈完全隔离）
+#
+# ⛔ 隔离纪律（用户明令）：
+#   1. 本编排与 V1 MySQL 栈（deploy/docker-compose.yml）互不相干：
+#      WSL 侧工作目录用 ~/health-rag-pg/（新建），数据卷名 health-rag-pg_pg-data，
+#      与旧 ~/health-rag/、health-rag_mysql-data / health-rag_redis-data 零交集。
+#   2. 旧目录 ~/health-rag/、旧容器、旧数据卷一律【只读】：不停、不删、不覆盖。
+#   3. 端口冲突（5432）→ 只 docker stop 冲突容器，绝不 rm，绝不 down -v。
+#
+# 本文件是【源】，勿直接在此执行（/mnt 路径性能差且会误触仓库文件）。
+# 部署：bash deploy/wsl-setup-pg.sh -y  →  在 ~/health-rag-pg/ 生成执行副本：
+#   · docker-compose.yml（本文件，initdb 挂载路径改写为 ./sql/）
+#   · Dockerfile + vendor/（钉版源码，docker compose build postgres 用）
+#   · .env（自仓库 deploy/.env 复制，含 PG_PASSWORD）
+#   · sql/（docs/sql/pg/ 三件套）
+# 首次启动（数据卷为空）自动执行 00-extensions → 01-schema → 02-seed。
+# ============================================================
+
+services:
+
+  postgres:
+    build:
+      context: .                # 本目录：Dockerfile + vendor/（钉版源码）
+      dockerfile: Dockerfile
+    image: health-rag/postgres-zh:16.4
+    container_name: health-rag-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: health_rag   # 库名与 V1 MySQL 一致，后端连接串改动最小
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD 未配置，请在工作目录 .env 中设置}
+      TZ: Asia/Shanghai
+    ports:
+      # ⚠️ 绑定 0.0.0.0 而非 127.0.0.1：本机 docker-ce（WSL 内）的回环绑定不会被
+      # WSL2 localhostForwarding 转发到 Windows（实测 connection refused），
+      # Windows 侧后端（IDEA/mvn）连不上。0.0.0.0 绑定走 WSL NAT 标准转发；
+      # 局域网入站由 Windows 防火墙默认拦截（vEthernet WSL 网卡无放行规则），
+      # 公共网络环境可再加显式拦截规则。V1 MySQL 的 127.0.0.1 绑定保留不动。
+      - "0.0.0.0:${PG_PORT:-5432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      # initdb 三件套：00 扩展与分词配置 → 01 结构 → 02 种子（仅空数据卷首启执行一次）
+      # 仓库源路径 ../../docs/sql/pg/，WSL 执行副本由 wsl-setup-pg.sh 改写为 ./sql/
+      - ../../docs/sql/pg/00-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
+      - ../../docs/sql/pg/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../../docs/sql/pg/02-seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d health_rag"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  pg-data:   # 项目名隔离：实际卷名 <项目名>_pg-data（WSL 侧 = health-rag-pg_pg-data）

@@ -1,0 +1,119 @@
+/* Markdown 排版（Vital v2）
+ * 仅约束排版与层级，颜色一律取设计令牌，随主题翻转。 */
+
+.markdown-body {
+  font-size: var(--text-chat);
+  line-height: 1.75;
+  word-break: break-word;
+}
+
+.markdown-body > * + * {
+  margin-top: 0.75rem;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.markdown-body h1 {
+  font-size: var(--text-section);
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--c-line);
+}
+
+.markdown-body h2,
+.markdown-body h3 {
+  font-size: var(--text-body);
+}
+
+.markdown-body h2::before,
+.markdown-body h3::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 0.9em;
+  margin-right: 0.5em;
+  vertical-align: -0.08em;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--grad-a), var(--grad-b));
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.25rem;
+}
+
+.markdown-body ul {
+  list-style: disc;
+}
+
+.markdown-body ol {
+  list-style: decimal;
+}
+
+.markdown-body li + li {
+  margin-top: 0.25rem;
+}
+
+.markdown-body li::marker {
+  color: var(--c-brand);
+}
+
+.markdown-body code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  background-color: var(--c-surface-2);
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-btn);
+  background-color: var(--c-surface-2);
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background-color: transparent;
+}
+
+.markdown-body blockquote {
+  padding: 0.4rem 0.75rem;
+  border-left: 3px solid var(--c-brand);
+  border-radius: 0 8px 8px 0;
+  color: var(--c-ink-muted);
+  background: var(--c-brand-soft);
+}
+
+.markdown-body a {
+  color: var(--c-brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--c-line);
+  text-align: left;
+}
+
+.markdown-body th {
+  background: var(--c-surface-2);
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--c-line);
+}

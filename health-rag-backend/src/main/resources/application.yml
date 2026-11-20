@@ -1,0 +1,189 @@
+server:
+  port: 8080
+
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: health-rag-backend
+
+  # 虚拟线程：LLM 调用与检索属 IO 密集型，收益明显
+  # 注意：禁止用 synchronized 包裹 HTTP 调用，否则会造成线程 pinning
+  threads:
+    virtual:
+      enabled: true
+
+  # 文件上传（M12/B-19）：契约 20MB 上限，容器上限放宽到 25MB 留余量
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+  # 时间格式：接口文档 §1 约定 "yyyy-MM-dd HH:mm:ss"。
+  # 注意 LocalDateTime 不受 date-format 控制，必须单独配 local-date-time-format，
+  # 否则默认输出 ISO 格式（2026-09-18T12:58:49）与文档不符。
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    local-date-time-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+  datasource:
+    # PostgreSQL 16（ADR-023）。
+    # stringtype=unspecified：String 参数不指定类型交给服务端推断 —— 这是
+    # 实体 String 字段直写 JSONB（references_json/meta_json 等）的最小适配方案。
+    url: "jdbc:postgresql://localhost:5432/health_rag?stringtype=unspecified&ApplicationName=health-rag-backend"
+    username: ${PG_USERNAME:postgres}
+    password: ${PG_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 15
+      connection-timeout: 10000
+
+  # AI 能力层配置
+  # api-key 保留占位默认值，使应用在未配置 Key 时也能正常启动
+  ai:
+    openai:
+      # 【2026-11-19 切换到 DeepSeek 开放平台】OpenAI 兼容协议。
+      # 真实 Key 写在 health-rag-backend/.env（已在 .gitignore 内，严禁入库），此处只留占位默认值。
+      # 历史：2026-10-25 因 qwen 免费额度耗尽切百炼的 deepseek-v4.1-flash →
+      #       2026-11-16 该模型触发 AllocationQuota.FreeTierOnly，又切回 qwen3.5-flash →
+      #       2026-11-19 改用 DeepSeek 官方平台（空闲时段 1 元/百万输入、4 元/百万输出）。
+      #       详见 docs/V2/17-模型额度治理与降级记录.md
+      #
+      # ⚠️ base-url 必须是 bare 的域名 —— Spring AI 会自行拼接 /v1/chat/completions。
+      #    写成 https://api.deepseek.com/v1 会得到 .../v1/v1/chat/completions 而 404（百炼时代已踩过）。
+      # ⚠️ 换成 DeepSeek 后【embedding 不能走这一套】：DeepSeek 不提供 embeddings 接口。
+      #    health.rag.embedding-provider 必须保持 ollama（本地 bge-m3）；
+      #    若切成 openai，EmbeddingModel 会向 api.deepseek.com/v1/embeddings 发请求 → 404。
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
+      api-key: ${DEEPSEEK_API_KEY:sk-REPLACE_ME}
+      chat:
+        options:
+          # deepseek-flash（模型版本 DeepSeek-V4.1-Flash-1017，上下文 1M）
+          # ⚠️ DeepSeek 的思考模式【默认开启】，且思考模式下 temperature 不生效。
+          #    代码侧统一由 ai/impl/ReasoningParams 传 {"thinking":{"type":"disabled"}} 关闭；
+          #    实测同一句"回复 OK"：开思考 48 tokens / 关思考 12 tokens，
+          #    且开思考会先推 reasoning_content 推理帧，污染首字延迟与前端渲染。
+          model: ${AI_CHAT_MODEL:deepseek-flash}
+          temperature: 0.3
+      embedding:
+        options:
+          # 百炼 embedding：维度 1024，与本地 bge-m3 一致。
+          # ⚠️ 原用 qwen3.7-text-embedding-flash，导入 587 条后触发
+          #    "Free quota exhausted"（免费额度耗尽），故改用 text-embedding-v4。
+          #   换模型后【必须全量重建向量】—— 不同模型的向量空间不可混用。
+          model: ${AI_EMBED_MODEL:text-embedding-v4}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      embedding:
+        options:
+          model: bge-m3
+          # P2-2：Ollama 默认 5 分钟空闲即卸载模型，重新加载 ~7s 全额计入首字延迟
+          # （实测毛刺 12~16s 的主因）。30m 常驻换内存占用，按机器自行权衡
+          keep-alive: ${OLLAMA_KEEP_ALIVE:30m}
+
+# 可观测性：LangSmith 链路追踪上报（默认关闭，避免默认依赖境外网络）
+langsmith:
+  endpoint: ${LANGSMITH_ENDPOINT:https://api.smith.langchain.com}
+  project: ${LANGSMITH_PROJECT:health-rag-backend}
+
+# AI 能力层：实现选择与行为开关
+health:
+  observability:
+    langsmith-enabled: ${LANGSMITH_ENABLED:false}
+  # 接口限流（02-接口文档 §1.5）：chat 档按用户（流式问答/语音识别），auth 档按 IP（注册/登录）
+  security:
+    rate-limit:
+      chat-per-minute: ${RATE_LIMIT_CHAT_PER_MINUTE:10}
+      auth-per-minute: ${RATE_LIMIT_AUTH_PER_MINUTE:5}
+  ai:
+    # 对话实现：dashscope（云端主实现） / ollama（本地兜底） / mock（前端联调）
+    # ⚠️ 2026-11-19 切 DeepSeek 后本值【仍保持 dashscope】，不要改成 deepseek：
+    #    它控制的是"用哪套实现类"（ReportLlmExtractor、DashScopeQueryRewriteService 等
+    #    按 provider=dashscope 做条件装配），而 DeepSeek 复用的正是同一套 OpenAI 兼容实现，
+    #    只是 base-url 指向 api.deepseek.com。改这个值会让报告抽取、查询改写整批不装配。
+    provider: ${AI_PROVIDER:dashscope}
+    # 百炼原生接口（rerank / ASR）专用 Key —— 它们走的是百炼自有 API，不是 OpenAI 协议。
+    # 2026-11-19 起 spring.ai.openai.api-key 已是 DeepSeek 的 Key，这两处【不能】再复用它，
+    # 否则会用 DeepSeek 的 Key 请求 dashscope.aliyuncs.com → 401。
+    # 留空时退化为环境变量 DASHSCOPE_API_KEY。
+    dashscope-api-key: ${DASHSCOPE_API_KEY:}
+    # 思考链开关。默认关闭，理由见 DashScopeChatService 类注释（实测数据支撑）
+    thinking-enabled: ${AI_THINKING_ENABLED:false}
+    # 是否启用 RAG。true 时用 RagChatService（检索+注入+引用），false 时用纯对话。
+    # 二者互斥装配，Controller 与前端无需改动（架构约束 C1 的收益）
+    rag-enabled: ${AI_RAG_ENABLED:true}
+
+  # RAG（M5/M6）
+  rag:
+    # 安全策略（M11/B-16）：置信度拒答阈值（向量路 top1 余弦）
+    # 2026-09-19 实测校准点：真实命中 0.72 / 无关乱串 0.40（bge-m3 余弦分布偏平），
+    # 默认 0.45 可区分两者；精确校准留 M13 评测集（PR 曲线）
+    safety:
+      reject-threshold: ${AI_SAFETY_REJECT_THRESHOLD:0.45}
+      pre-filter-enabled: ${AI_SAFETY_PREFILTER:true}
+    # rerank（M11/B-15，用户 2026-09-19 恢复）：仅 hybrid_rerank 策略调用；
+    # 模型 qwen3.7-text-rerank，额度 1M token —— 每次调用打用量日志，由使用者人工监控
+    # 2026-11-16 改 gte-rerank-v2：qwen3.7-text-rerank 触发 AllocationQuota.FreeTierOnly，
+    #   而该失败被 DashScopeRerankService 静默降级为 RRF 原序（只打 WARN），
+    #   会让 hybrid_rerank 与 hybrid 指标完全相同 —— 评测侧必须核对这一点。
+    #   实测当日可用：gte-rerank-v2 / qwen3-rerank / qwen3-vl-rerank
+    rerank-enabled: ${AI_RAG_RERANK_ENABLED:true}
+    rerank-model: ${AI_RAG_RERANK_MODEL:gte-rerank-v2}
+    # 上传文档（M12/B-19）：落盘目录（原文保留，重建向量可由其重跑；目录在 .gitignore 内）
+    upload-dir: ${KB_UPLOAD_DIR:./data/uploads}
+    upload-max-size-mb: ${KB_UPLOAD_MAX_MB:20}
+    upload-allowed-types: ${KB_UPLOAD_TYPES:txt,md,html,htm,pdf,docx}
+    # 检索返回条数（注入 Prompt 的参考资料数量）
+    top-k: ${AI_RAG_TOP_K:5}
+    # 个人资料保底（测试报告 §21.3 D5）：合并检索（kbScope=all）时，个人块常被
+    # 全局库的"纯主题块"挤出 topK —— 实测「我的血压是多少」个人块排第 9、
+    # 「是不是 160/100」排第 17，而候选池只有 topK*2=10，导致系统答"没有你的数据"。
+    # 规则：单独取个人块，余弦 ≥ min-score 的最多 min-hits 条**强制进入最终 topK**（替换尾部全局块）。
+    # min-hits=0 可整体关闭（四策略消融实验如需纯净基线，置 0）。
+    # ⚠️ min-score 取 0.60 的依据（实测，§24.4）：误召块 0.5848/0.5742（"运动频率与时长"被
+    #    误当成"喝多少水"）要排除，而真相关块 0.6094（相背血压题）/0.6683（血压题）要保留，
+    #    0.60 正好卡在两者之间。样本量小，仍需在评测集上校准。
+    user-kb:
+      personal-guarantee-hits: ${AI_RAG_PERSONAL_HITS:2}
+      personal-guarantee-score: ${AI_RAG_PERSONAL_SCORE:0.60}
+    # 默认检索策略：hybrid（向量+ngram 关键词，RRF 融合）/ naive 纯向量 / none 不检索
+    # M7 起 hybrid 为主链路（ADR-018：rerank 退出主链路，仅作实验组）
+    default-mode: ${AI_RAG_MODE:hybrid}
+    # 启动即预热 embedding 模型：把 bge-m3 冷启动的约 7 秒从用户请求挪到启动阶段
+    warmup-enabled: ${AI_RAG_WARMUP:true}
+    # 向量提供方：ollama = 本地 bge-m3（免费离线）；openai = 云端百炼（需额度）
+    # ⚠️ 切换后必须全量重建向量库（不同模型向量空间不可混用）
+    embedding-provider: ${AI_EMBED_PROVIDER:ollama}
+    # 向量维度（元信息接口展示；必须与 embedding 模型实际输出一致）
+    embedding-dimension: ${AI_EMBED_DIMENSION:1024}
+    # 语料分块目录；为空则启动时不执行导入（正常提供 Web 服务）
+    corpus-dir: ${KB_CORPUS_DIR:}
+    # 是否全量重建（清空既有知识库与向量后重新导入）
+    rebuild: ${KB_REBUILD:false}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # 构造器按参数名映射（records）：VectorHit/KeywordHit 等自定义结果类型必需。
+    # 关闭时按位置映射，列序与组件顺序不一致即错位（实测：double 槽位收到 NULL 直接 NPE）。
+    # 依赖 spring-boot-starter-parent 默认开启的 -parameters 编译参数。
+    arg-name-based-constructor-auto-mapping: true
+  global-config:
+    banner: false
+    db-config:
+      logic-delete-field: deleted
+      # PG BOOLEAN 列（ADR-023）：逻辑删除值直接产出 SQL 字面量 true/false
+      logic-delete-value: true
+      logic-not-delete-value: false
+
+# JWT（M2 认证）
+# 生产环境必须通过环境变量 JWT_SECRET 注入，切勿沿用此默认值
+jwt:
+  secret: ${JWT_SECRET:health-rag-backend-dev-secret-override-by-env-0123456789abcdef}
+  expire-hours: 24
+
+logging:
+  level:
+    com.healthscience.rag: debug

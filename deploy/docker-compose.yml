@@ -1,0 +1,80 @@
+# ============================================================
+# 健康科普 RAG 系统 · 中间件编排
+#
+# 启动：在 WSL 中进入本目录，执行
+#   cp .env.example .env    # 按需修改密码与端口
+#   docker compose up -d
+#
+# 说明：
+# 1. 首次启动会自动执行 01-schema.sql 建表 + 02-seed.sql 灌模拟数据（仅在数据卷为空时执行一次）。
+#    即：数据卷为空的首次 `up -d`，得到的就是「结构 + 模拟数据」都齐的可用库，无需手工导入。
+#    已有数据后不会重复执行（initdb 机制决定），seed 的 DELETE 语句因此不会误伤真实数据。
+# 2. ⛔ 禁止执行 `docker compose down -v` —— 它会删除数据卷，导致业务数据与语料
+#    不可恢复（见 docs/设计定稿.md 变更纪律 5）。
+#    表结构变更请走 ALTER TABLE（../docs/sql/schema.sql 尾部已备增量语句）。
+#    确需重建时，必须先用 mysqldump 备份并确认备份可用（见 docs/数据库设计.md §六）。
+# 3. --ngram-token-size=2 是**显式钉住**中文全文检索的分词粒度。
+#    MySQL 8 默认值本就是 2，显式传入是为了防止未来版本变更默认值、
+#    导致已有的 FULLTEXT ngram 索引静默失效。启动后须验证：
+#       SHOW VARIABLES LIKE 'ngram_token_size';   -- 期望 2
+# 4. 端口统一绑定 127.0.0.1（仅本机可访问），
+#    避免开发机处于校园网/公共 WiFi 时 MySQL 与 Redis 暴露在局域网中。
+# 5. 容器内互访用服务名 mysql:3306 / redis:6379；
+#    Windows 侧（IDEA 跑后端）用 localhost:3306 / localhost:6379。
+# 6. 起步阶段建议只启 MySQL：docker compose up -d mysql
+#    （Redis 的四个用途在 M1~M3 一个都用不到，且可能与已有实例端口冲突）
+# 7. 【v2.0】本文件是 V1 MySQL 栈，冻结保留至 PG 迁移验收通过（docs/V2/04 §八），
+#    日常不要动它；PostgreSQL 主库走独立编排：deploy/pg/docker-compose.yml。
+# ============================================================
+
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: health-rag-mysql
+    restart: unless-stopped
+    environment:
+      # 强制校验：未配置 .env 时直接报错退出，避免弱口令静默生效
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 未配置，请先 cp .env.example .env 并修改}
+      MYSQL_DATABASE: health_rag
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --ngram-token-size=2
+      - --default-time-zone=+08:00
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 单文件挂载：把"会被自动执行"的范围收敛到两个确定的文件，
+      # 避免将来放入 backup-*.sql / alter-*.sql 时被误执行
+      - ../docs/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # 02 前缀保证排在 01-schema.sql 之后执行
+      - ../docs/sql/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: health-rag-redis
+    restart: unless-stopped
+    # 不启用 --appendonly：Redis 仅承担缓存/计数/黑名单职责，数据可丢、无需持久化
+    # （见 docs/数据库设计.md §六 数据生命周期）
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  mysql-data:
+  redis-data:

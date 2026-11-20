@@ -1,0 +1,78 @@
+event:reference
+data:{"chunks":[]}
+
+event:delta
+data:{"content":"【Moc"}
+
+event:delta
+data:{"content":"k 回答"}
+
+event:delta
+data:{"content":"】当前为"}
+
+event:delta
+data:{"content":" M1 "}
+
+event:delta
+data:{"content":"阶段的模"}
+
+event:delta
+data:{"content":"拟流式响"}
+
+event:delta
+data:{"content":"应，用于"}
+
+event:delta
+data:{"content":"前端联调"}
+
+event:delta
+data:{"content":" SSE"}
+
+event:delta
+data:{"content":" 链路（"}
+
+event:delta
+data:{"content":"refe"}
+
+event:delta
+data:{"content":"renc"}
+
+event:delta
+data:{"content":"e → "}
+
+event:delta
+data:{"content":"delt"}
+
+event:delta
+data:{"content":"a×n "}
+
+event:delta
+data:{"content":"→ do"}
+
+event:delta
+data:{"content":"ne）。"}
+
+event:delta
+data:{"content":"真实回答"}
+
+event:delta
+data:{"content":"将在 M"}
+
+event:delta
+data:{"content":"4 接入"}
+
+event:delta
+data:{"content":" Dee"}
+
+event:delta
+data:{"content":"pSee"}
+
+event:delta
+data:{"content":"k 后产"}
+
+event:delta
+data:{"content":"生。"}
+
+event:done
+data:{"messageId":null,"sessionId":null,"latencyMs":2292,"firstTokenMs":143,"finishStatus":1,"content":"【Mock 回答】当前为 M1 阶段的模拟流式响应，用于前端联调 SSE 链路（reference → delta×n → done）。真实回答将在 M4 接入 DeepSeek 后产生。"}
+

@@ -1,0 +1,287 @@
+@import 'tailwindcss';
+@import './tokens.css';
+@import './markdown.css';
+
+/* ============================================================
+ * 全局基础样式 + 动效系统（「生命体征 · Vital」）
+ * 动效原则（克制）：只为「系统正在工作」编排动效——
+ *   脉搏线（流式心跳）、阶段时间线（检索进度）、流式光标。
+ *   其余动效限定在微交互（hover / 入场），prefers-reduced-motion 全部关闭。
+ * ============================================================ */
+
+@layer base {
+  :root {
+    /* iOS 安全区（需 index.html 的 viewport-fit=cover 才非 0；桌面/安卓浏览器回退 0px）。
+       底部标签栏与输入区依赖它避开 Home 指示条与全面屏圆角。 */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
+  html {
+    /* 移动端：dvh 而不是 vh —— iOS 软键盘顶起 100vh 后不再回弹 */
+    height: 100dvh;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    height: 100%;
+    margin: 0;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+      'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: var(--text-body);
+    line-height: 1.6;
+    color: var(--c-ink);
+    background-color: var(--c-canvas);
+  }
+
+  #app {
+    height: 100%;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--c-brand);
+    outline-offset: 2px;
+  }
+
+  /* 移动端：<16px 输入框聚焦会触发 iOS 自动放大 */
+  @media (max-width: 767px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--c-ink-muted) 30%, transparent);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* 数字仪表读数：等宽数字 + 显示字体 */
+  .tnum {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  /* 双温区主渐变（按钮 / 强调块）。文字色由 --grad-on 保证对比度 */
+  .grad-primary {
+    background-image: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+    color: var(--grad-on);
+  }
+
+  /* 渐变文字（标题 / 大数字） */
+  .grad-text {
+    background-image: linear-gradient(120deg, var(--grad-a), var(--grad-b));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* 毛玻璃面板（顶栏 / 命令面板） */
+  .glass {
+    background: var(--header-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /* 卡片 hover：描边点亮而非投影（暗色下投影发灰） */
+  .card-lift {
+    transition:
+      border-color 0.2s ease,
+      transform 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .card-lift:hover {
+    border-color: var(--c-brand);
+    transform: translateY(-1px);
+  }
+
+  /* 流式打字光标 */
+  .stream-caret::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    background: var(--c-accent);
+    animation: caret-blink 0.9s steps(2, start) infinite;
+  }
+
+  /* 溯源高亮（微交互①：引用 → 原文定位） */
+  .hl-flash {
+    background-color: var(--c-brand-soft);
+    color: inherit;
+    border-radius: 4px;
+    padding: 0 2px;
+    animation: hl-glow 1.4s ease-out 2;
+  }
+
+  /* 消息入场 */
+  .msg-in {
+    animation: fade-up 0.32s ease both;
+  }
+
+  /* 骨架微光 */
+  .shimmer {
+    background: linear-gradient(
+      100deg,
+      var(--c-surface-2) 40%,
+      color-mix(in srgb, var(--c-brand) 12%, var(--c-surface-2)) 50%,
+      var(--c-surface-2) 60%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  /* 编排式入场：列表项按序淡入上移，间隔由内联 animation-delay 控制。
+     reduce 下整体关闭——既不位移也不淡入，直接呈现终态。 */
+  .fade-up {
+    animation: fade-up 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fade-up {
+      animation: none;
+    }
+  }
+
+  /* ---------------- 移动端适配工具类 ---------------- */
+
+  /* 触屏常显 / 指针悬停显示（会话行的重命名·删除）。
+     触屏没有 hover，靠 hover 才出现的操作等于功能不存在；
+     用 (hover: hover) 而非断点判断，可同时覆盖 iPad 等大屏触控设备。 */
+  .actions-reveal {
+    display: flex;
+    gap: 0.5rem;
+  }
+  @media (hover: hover) {
+    .actions-reveal {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+    .group:hover .actions-reveal,
+    .group:focus-within .actions-reveal {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  /* 横向滚动容器：管理端表格/图表在小屏下的唯一出路 */
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  /* 底部标签栏容器：内容高度 + iOS 安全区 */
+  .tabbar-safe {
+    padding-bottom: var(--safe-bottom);
+  }
+
+  /* 输入区/底部面板：向上让出安全区高度 */
+  .pb-safe {
+    padding-bottom: max(0.5rem, var(--safe-bottom));
+  }
+
+  /* 触屏上 :hover 会在点按后持续粘住，导致卡片一直处于「点亮」态 —— 关掉位移与变色 */
+  @media (hover: none) {
+    .card-lift:hover {
+      transform: none;
+      border-color: var(--c-line);
+    }
+  }
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes hl-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-brand) 35%, transparent);
+  }
+}
+
+@keyframes pulse-draw {
+  0% {
+    stroke-dashoffset: 160;
+  }
+  60% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -160;
+  }
+}
+
+@keyframes blob-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(6%, -8%, 0) scale(1.12);
+  }
+  100% {
+    transform: translate3d(-5%, 6%, 0) scale(0.96);
+  }
+}

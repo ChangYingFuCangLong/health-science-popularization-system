@@ -1,0 +1,42 @@
+# ============================================================
+# 仓库根级忽略规则（子目录各自的 .gitignore 继续生效，这里做兜底）
+# ============================================================
+
+# 依赖与构建产物
+node_modules/
+target/
+dist/
+dist-ssr/
+*.class
+*.jar
+*.war
+*.tsbuildinfo
+
+# 运行数据与日志
+data/
+*.log
+logs/
+tmp/
+health-rag-frontend/tests/e2e/screenshots/
+
+# 密钥与环境变量（.env.development / .env.production 只含 VITE_API_BASE，仍需入库）
+.env
+.env.local
+.env.*.local
+*.local
+
+# 部署侧敏感数据：数据库密码、真实库备份
+deploy/.env
+deploy/backup/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+Thumbs.db
+
+# Python 缓存
+__pycache__/
+*.pyc
